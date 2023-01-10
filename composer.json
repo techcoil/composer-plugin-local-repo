@@ -1,0 +1,28 @@
+{
+  "name": "techcoil/composer-plugin-local-repo",
+  "type": "composer-plugin",
+  "license": "MIT",
+  "description": "A composer plugin to install packages from a local directory with ease",
+    "keywords": [
+        "composer",
+        "plugin",
+        "local",
+        "repository"
+    ],
+    "require": {
+      "php": "^7.4|^8.0",
+      "composer-plugin-api": "^2.0"
+    },
+    "require-dev": {
+      "composer/composer": "^2.0",
+      "phpunit/phpunit": "^9.5"
+    },
+    "extra": {
+        "class": "Techcoil\\LocalRepo\\LocalRepoPlugin"
+    },
+    "autoload": {
+        "psr-4": {
+            "Techcoil\\LocalRepo\\": "src/"
+        }
+    }
+}
