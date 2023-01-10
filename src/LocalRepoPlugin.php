@@ -12,6 +12,10 @@ use Composer\Repository\PathRepository;
 class LocalRepoPlugin implements PluginInterface, EventSubscriberInterface
 {
 
+    const EXTRA_CONFIG_KEY = 'local-repo';
+
+    const DEBUG_TAG = 'techcoil/composer-plugin-local-repo';
+
     /** @var Composer|null */
     protected $composer;
 
@@ -45,10 +49,11 @@ class LocalRepoPlugin implements PluginInterface, EventSubscriberInterface
     public function addLocalRepos(Event $event)
     {
         $possible_packages = $this->locateComposerJsons();
-        foreach($possible_packages as $package_config) {
+        foreach ($possible_packages as $package_config) {
             $config = json_decode(file_get_contents($package_config), true);
-            if(is_array($config)) {
-                $this->io->write("Adding local package: {$config['name']}");
+            if (is_array($config)) {
+                $package_name = $config['name'] ?? '';
+                $this->debug("Adding local repo {$package_name} from: {$package_config}");
                 $this->composer->getRepositoryManager()->addRepository(new PathRepository([
                     'url' => dirname($package_config),
                     'options' => [
@@ -59,33 +64,45 @@ class LocalRepoPlugin implements PluginInterface, EventSubscriberInterface
         }
     }
 
-    protected function locateComposerJsons() {
+    protected function locateComposerJsons()
+    {
         $paths = (array)$this->getConfig('paths', []);
         $depth = (int)$this->getConfig('depth', 1);
-        $depth = (int)$this->getConfig('ignore', []);
+        $ignore = (array)$this->getConfig('ignore', []);
 
         $possible_packages = [];
-        foreach($paths as $path) {
-            $possible_packages = array_merge($possible_packages, $this->findComposerJsons($path, $depth));
+        foreach ($paths as $path) {
+            $possible_packages = array_merge($possible_packages, $this->findComposerJsons($path, $depth, $ignore));
         }
 
         return $possible_packages;
     }
 
-    protected function isPathIgnored($path, $ignores = []) {
-        foreach($ignores as $ignore) {
-            if(fnmatch($path, $ignore) !== false) {
+    protected function isPathIgnored($path, $ignores = [])
+    {
+        foreach ($ignores as $ignore) {
+            if (fnmatch($ignore, $path) !== false) {
                 return true;
             }
         }
         return false;
     }
 
-    protected static function findComposerJsons($path, $depth) {
+    protected function findComposerJsons($path, $depth, $ignore)
+    {
         $paths = [];
-        for($i = 0; $i <= $depth; $i++) {
+        for ($i = 0; $i <= $depth; $i++) {
             $depth_wildcard = str_repeat('/*', $i);
-            $paths = array_merge($paths, glob("{$path}{$depth_wildcard}/composer.json"));
+            $configs = glob("{$path}{$depth_wildcard}/composer.json");
+
+            foreach ($configs as $config) {
+                $dir = dirname($config);
+                if ($this->isPathIgnored($dir, $ignore) === false) {
+                    $paths[] = $config;
+                } else {
+                    $this->debug("path `{$dir}` is ignored by config");
+                }
+            }
         }
         return $paths;
     }
@@ -102,13 +119,14 @@ class LocalRepoPlugin implements PluginInterface, EventSubscriberInterface
         if ($this->config === null) {
             $this->config = [
                 'path' => 'src',
-                'depth'=> 1,
-                'symlink'=>true
+                'depth' => 1,
+                'symlink' => true,
+                'ignore' => []
             ];
 
             $rootPackage = $this->getComposer()->getPackage();
             $extra = $rootPackage->getExtra();
-            $config = $extra['local-repo'] ?? [];
+            $config = $extra[self::EXTRA_CONFIG_KEY] ?? [];
             $this->config = array_merge($this->config, $config);
         }
 
@@ -132,4 +150,8 @@ class LocalRepoPlugin implements PluginInterface, EventSubscriberInterface
     {
     }
 
+    protected function debug($message, $context = [])
+    {
+        $this->io->debug(self::DEBUG_TAG . ' :: ' . $message, $context);
+    }
 }
